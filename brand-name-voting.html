@@ -18,7 +18,9 @@
   .top{display:flex;align-items:center;height:40px;flex:0 0 auto;}
   .top .left{width:70px;text-align:left;}
   .top .mid{flex:1;text-align:center;color:var(--mut);font-size:15px;font-weight:600;letter-spacing:.3px;}
-  .top .right{width:70px;height:40px;}            /* secret admin hotspot */
+  .top .right{width:70px;height:40px;display:flex;align-items:center;justify-content:flex-end;}
+  .menubtn{background:transparent;border:none;color:var(--mut);font-size:26px;line-height:1;padding:6px 4px;margin:0;cursor:pointer;border-radius:8px;}
+  .menubtn:active{color:var(--txt);background:var(--panel2);}
   .back{display:inline-block;color:var(--mut);font-size:16px;padding:8px 6px;}
   .body{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;}
   /* generic */
@@ -164,12 +166,12 @@ function render(){
   else if(screen==="admin") h=vAdmin();
   $().innerHTML=h;
   window.scrollTo(0,0);
-  wireHotspot();
 }
-function topbar(leftHTML, midHTML){
+function topbar(leftHTML, midHTML, hideMenu){
+  var right = hideMenu ? '' : '<button class="menubtn" aria-label="Admin menu" onclick="openAdmin()">&#9776;</button>';
   return '<div class="top"><div class="left">'+(leftHTML||"")+'</div>'+
          '<div class="mid">'+(midHTML||"")+'</div>'+
-         '<div class="right" id="hot"></div></div>';
+         '<div class="right">'+right+'</div></div>';
 }
 
 /* ---------- WELCOME ---------- */
@@ -283,18 +285,7 @@ function saveAndNext(){
   P=null; screen="welcome"; render();
 }
 
-/* ===================== HIDDEN ADMIN ===================== */
-var tapTimes=[];
-function wireHotspot(){
-  var el=document.getElementById("hot");
-  if(!el) return;
-  el.onclick=function(){
-    var now=Date.now();
-    tapTimes.push(now);
-    tapTimes=tapTimes.filter(function(t){return now-t<2500;});
-    if(tapTimes.length>=5){ tapTimes=[]; openAdmin(); }
-  };
-}
+/* ===================== ADMIN (hamburger ☰, PIN-gated) ===================== */
 function openAdmin(){
   var p=prompt("Admin PIN:");
   if(p===null) return;
@@ -313,7 +304,7 @@ function tally(){
   }).sort(function(x,y){ return y.wins-x.wins || y.avg-x.avg || x.brand.localeCompare(y.brand); });
 }
 function vAdmin(){
-  var h=topbar('<span class="back" onclick="screen=\'welcome\';render()">‹ Exit</span>', "Admin");
+  var h=topbar('<span class="back" onclick="screen=\'welcome\';render()">‹ Exit</span>', "Admin", true);
   h+='<div class="body fade" style="justify-content:flex-start">';
   var subs=DB.submissions, t=tally();
   if(subs.length===0){
@@ -334,7 +325,7 @@ function vAdmin(){
   h+='<button class="btn ghost sm" onclick="exportCSV()">Export results (CSV)</button>';
   h+='<button class="btn ghost sm" onclick="changePin()">Change admin PIN</button>';
   h+='<button class="btn danger" onclick="resetAll()">Erase all votes</button>';
-  h+='<div class="center small muted" style="margin-top:10px">Tip: tap the top-right corner 5× to open this menu.</div>';
+  h+='<div class="center small muted" style="margin-top:10px">Open this menu anytime with the ☰ button (top-right).</div>';
   h+='</div>';
   return h;
 }
