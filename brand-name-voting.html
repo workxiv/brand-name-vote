@@ -240,30 +240,21 @@ function pick(side){
   if(!currentMatch()){ screen="winner"; }
   render();
 }
-function undoMatch(){
-  // clear the most recently decided non-bye match
-  var last=null;
-  for(var r=0;r<P.rounds.length;r++) P.rounds[r].forEach(function(m){ if(!m.bye && m.winner!==null) last=m; });
-  if(last){ last.winner=null;
-    // drop any rounds built after current decisions to avoid stale pairings
-    rebuildFromDecisions();
+function undoLast(){
+  // reopen ONLY the most-recently decided non-bye matchup; drop any rounds built after it
+  var ri=-1, mi=-1;
+  for(var r=0;r<P.rounds.length;r++){
+    for(var i=0;i<P.rounds[r].length;i++){
+      var m=P.rounds[r][i];
+      if(!m.bye && m.winner!==null){ ri=r; mi=i; }
+    }
   }
-  render();
+  if(ri<0) return;
+  P.rounds[ri][mi].winner=null;       // reopen that exact matchup
+  P.rounds=P.rounds.slice(0, ri+1);   // discard later rounds (now based on a stale winner)
+  P.ri=ri; P.winner=null;
 }
-function rebuildFromDecisions(){
-  // keep round 0; rebuild subsequent rounds from resolved winners only
-  var keep=[P.rounds[0]];
-  var ri=0;
-  while(true){
-    var round=keep[ri];
-    var anyOpen=round.some(function(m){return !m.bye && m.winner===null;});
-    if(anyOpen) break;
-    var winners=round.map(function(x){return x.winner;});
-    if(winners.length<=1) break;
-    keep.push(buildRound(winners)); ri++;
-  }
-  P.rounds=keep; P.ri=ri; P.winner=null;
-}
+function undoMatch(){ undoLast(); render(); }
 
 /* ---------- WINNER ---------- */
 function vWinner(){
@@ -275,9 +266,14 @@ function vWinner(){
   h+='<div class="winname">'+esc(w)+'</div>';
   h+= imgFor(w)? '<img class="logo" src="'+imgFor(w)+'" alt="">' : '';
   h+='<button class="btn green" style="margin-top:22px" onclick="saveAndNext()">Save & pass to next person →</button>';
-  h+='<button class="btn ghost sm" onclick="screen=\'match\';P.winner=null;render()">‹ Back to matchups</button>';
+  h+='<button class="btn ghost sm" onclick="backToFinal()">‹ Redo the final pick</button>';
   h+='</div>';
   return h;
+}
+function backToFinal(){
+  // reopen the championship matchup so the final pick can be changed
+  undoLast();
+  screen="match"; render();
 }
 function saveAndNext(){
   DB.submissions.push({ name:P.name, scores:P.scores, winner:P.winner, ts:Date.now() });
