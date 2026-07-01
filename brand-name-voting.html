@@ -86,6 +86,12 @@
   h2{font-size:20px;margin:6px 0 10px;}
   .lead{display:flex;align-items:center;gap:12px;background:var(--panel2);border:1px solid var(--gold);border-radius:14px;padding:14px;margin:10px 0;}
   .lead .big{font-size:24px;font-weight:900;color:var(--gold);}
+  .prow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 6px;border-bottom:1px solid var(--line);cursor:pointer;}
+  .prow:active{background:var(--panel2);}
+  .prow:last-child{border-bottom:none;}
+  .rlabel{margin:14px 0 4px;color:var(--mut);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;}
+  .mrow{padding:7px 4px;font-size:17px;border-bottom:1px solid rgba(255,255,255,.04);}
+  .pick{color:var(--green);font-weight:800;}
   .fade{opacity:.0;animation:fin .25s ease forwards;}
   @keyframes fin{to{opacity:1;}}
 </style>
@@ -117,6 +123,7 @@ function esc(t){return String(t).replace(/[&<>"']/g,function(c){return {'&':'&am
 /* ===================== RUNTIME ===================== */
 var screen="welcome";   // welcome | rate | match | winner | admin
 var P=null;             // current person session
+var adminDetail=null;   // index of submission being viewed in admin detail, or null
 function newPerson(name){ return { name:name, scores:{}, rateIdx:0, rounds:[], ri:0, winner:null }; }
 
 /* ===================== BRACKET (per person, from their own scores) ===================== */
@@ -276,7 +283,7 @@ function backToFinal(){
   screen="match"; render();
 }
 function saveAndNext(){
-  DB.submissions.push({ name:P.name, scores:P.scores, winner:P.winner, ts:Date.now() });
+  DB.submissions.push({ name:P.name, scores:P.scores, winner:P.winner, bracket:P.rounds, ts:Date.now() });
   saveDB();
   P=null; screen="welcome"; render();
 }
@@ -286,8 +293,12 @@ function openAdmin(){
   var p=prompt("Admin PIN:");
   if(p===null) return;
   if(p!==DB.pin){ alert("Wrong PIN"); return; }
-  screen="admin"; render();
+  adminDetail=null; screen="admin"; render();
 }
+function openDetail(i){ adminDetail=i; render(); }
+function closeDetail(){ adminDetail=null; render(); }
+function roundLabel(idx,total){ if(idx===total-1)return "Final"; if(idx===total-2)return "Semifinal"; return "Round "+(idx+1); }
+function tImg(b){ return imgFor(b)?'<img class="thumb" src="'+imgFor(b)+'"> ':''; }
 function tally(){
   var wins={}, scoreSum={}, scoreCnt={};
   DB.brands.forEach(function(b){ wins[b]=0; scoreSum[b]=0; scoreCnt[b]=0; });
@@ -300,6 +311,7 @@ function tally(){
   }).sort(function(x,y){ return y.wins-x.wins || y.avg-x.avg || x.brand.localeCompare(y.brand); });
 }
 function vAdmin(){
+  if(adminDetail!==null && DB.submissions[adminDetail]) return vPersonDetail(DB.submissions[adminDetail]);
   var h=topbar('<span class="back" onclick="screen=\'welcome\';render()">‹ Exit</span>', "Admin", true);
   h+='<div class="body fade" style="justify-content:flex-start">';
   var subs=DB.submissions, t=tally();
@@ -313,15 +325,46 @@ function vAdmin(){
     h+='<div class="card"><h2>Tally</h2><table><tr><th>#</th><th>Brand</th><th class="r">Wins</th><th class="r">Avg score</th></tr>';
     t.forEach(function(r,i){ h+='<tr><td>'+(i+1)+'</td><td>'+(imgFor(r.brand)?'<img class="thumb" src="'+imgFor(r.brand)+'">':'')+esc(r.brand)+'</td><td class="r">'+r.wins+'</td><td class="r">'+r.avg.toFixed(2)+'</td></tr>'; });
     h+='</table></div>';
-    h+='<div class="card"><h2>Each person</h2><table><tr><th>Name</th><th>Picked</th></tr>';
-    subs.slice().reverse().forEach(function(s){ h+='<tr><td>'+esc(s.name)+'</td><td>'+esc(s.winner)+'</td></tr>'; });
-    h+='</table></div>';
+    h+='<div class="card"><h2>Each person</h2><div class="small muted" style="margin:-4px 0 8px">Tap a name to see their full 1–10 ranking and every knockout pick.</div>';
+    for(var k=subs.length-1;k>=0;k--){ var s=subs[k];
+      h+='<div class="prow" onclick="openDetail('+k+')"><div>'+tImg(s.winner)+'<b>'+esc(s.name)+'</b> <span class="muted small">picked '+esc(s.winner)+'</span></div><span class="muted" style="font-size:22px">›</span></div>';
+    }
+    h+='</div>';
   }
   h+='<button class="btn ghost sm" onclick="exportJSON()">Export results (JSON)</button>';
   h+='<button class="btn ghost sm" onclick="exportCSV()">Export results (CSV)</button>';
   h+='<button class="btn ghost sm" onclick="changePin()">Change admin PIN</button>';
   h+='<button class="btn danger" onclick="resetAll()">Erase all votes</button>';
   h+='<div class="center small muted" style="margin-top:10px">Open this menu anytime with the ☰ button (top-right).</div>';
+  h+='</div>';
+  return h;
+}
+function vPersonDetail(s){
+  var h=topbar('<span class="back" onclick="closeDetail()">‹ Back</span>', esc(s.name), true);
+  h+='<div class="body fade" style="justify-content:flex-start">';
+  h+='<div class="card"><div class="small muted">Their winner</div><div style="font-weight:800;font-size:20px;margin-top:4px">'+tImg(s.winner)+esc(s.winner)+'</div></div>';
+  // individual ranking (their 1-10 scores, sorted high -> low)
+  h+='<div class="card"><h2>Their ranking (1–10)</h2><table><tr><th>#</th><th>Brand</th><th class="r">Score</th></tr>';
+  var ranked=DB.brands.map(function(b){ return {b:b, sc:(s.scores&&s.scores[b]!=null)?s.scores[b]:null}; })
+     .sort(function(x,y){ return (y.sc||0)-(x.sc||0) || x.b.localeCompare(y.b); });
+  ranked.forEach(function(r,i){ h+='<tr><td>'+(i+1)+'</td><td>'+tImg(r.b)+esc(r.b)+'</td><td class="r">'+(r.sc==null?'—':r.sc)+'</td></tr>'; });
+  h+='</table></div>';
+  // round-by-round tournament picks
+  if(s.bracket && s.bracket.length){
+    h+='<div class="card"><h2>Their tournament picks</h2>';
+    s.bracket.forEach(function(round,idx){
+      h+='<div class="rlabel">'+roundLabel(idx,s.bracket.length)+'</div>';
+      round.forEach(function(m){
+        if(m.bye){ h+='<div class="mrow">'+tImg(m.a)+esc(m.a)+' <span class="muted small">— bye (auto-advanced)</span></div>'; return; }
+        function side(n){ var w=(m.winner===n); return '<span class="'+(w?'pick':'muted')+'">'+esc(n)+(w?' ✓':'')+'</span>'; }
+        h+='<div class="mrow">'+side(m.a)+' <span class="muted small">vs</span> '+side(m.b)+'</div>';
+      });
+    });
+    h+='</div>';
+  }else{
+    h+='<div class="card small muted">Round-by-round picks weren\'t recorded for this vote (it was cast before this feature was added). Their ranking and winner are shown above.</div>';
+  }
+  h+='<button class="btn ghost sm" onclick="closeDetail()">‹ Back to admin</button>';
   h+='</div>';
   return h;
 }
