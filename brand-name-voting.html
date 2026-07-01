@@ -331,8 +331,12 @@ function vAdmin(){
     }
     h+='</div>';
   }
-  h+='<button class="btn ghost sm" onclick="exportJSON()">Export results (JSON)</button>';
-  h+='<button class="btn ghost sm" onclick="exportCSV()">Export results (CSV)</button>';
+  if(subs.length){
+    h+='<button class="btn green" onclick="copyResults()">📋 Copy results (to back up)</button>';
+    h+='<div class="center small muted" style="margin:-4px 0 8px">Tap, then paste to save a backup (e.g. send it to Claude to store on GitHub).</div>';
+  }
+  h+='<button class="btn ghost sm" onclick="exportJSON()">Export results (JSON file)</button>';
+  h+='<button class="btn ghost sm" onclick="exportCSV()">Export results (CSV file)</button>';
   h+='<button class="btn ghost sm" onclick="changePin()">Change admin PIN</button>';
   h+='<button class="btn danger" onclick="resetAll()">Erase all votes</button>';
   h+='<div class="center small muted" style="margin-top:10px">Open this menu anytime with the ☰ button (top-right).</div>';
@@ -367,6 +371,17 @@ function vPersonDetail(s){
   h+='<button class="btn ghost sm" onclick="closeDetail()">‹ Back to admin</button>';
   h+='</div>';
   return h;
+}
+function backupText(){ return JSON.stringify({ v:"brandVote_v3", exported:new Date().toISOString(), data:DB }); }
+function copyResults(){
+  var text=backupText();
+  var ok=function(){ alert("Results copied! Paste them anywhere to save a backup (e.g. send to Claude to store on GitHub)."); };
+  var manual=function(){ window.prompt("Select all, then Copy these results:", text); };
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(ok, manual);
+    } else { manual(); }
+  }catch(e){ manual(); }
 }
 function changePin(){
   var p=prompt("New admin PIN (digits):", DB.pin);
